@@ -87,9 +87,9 @@ class MLPlay:
         """
         return "MOVE_LEFT", "MOVE_RIGHT" or "NONE"
         """
-        if (platform_x + 17) > predict_x:
+        if (platform_x + 17) > predict_x and platform_x > 0:
             return "MOVE_LEFT"
-        elif (platform_x + 23) < predict_x:
+        elif (platform_x + 23) < predict_x and platform_x < 160:
             return "MOVE_RIGHT"
         else:
             return "NONE"
