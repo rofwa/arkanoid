@@ -1,7 +1,9 @@
 """
 The template of the main script of the machine learning process
 """
-import random
+import os
+import pickle
+import numpy as np
 
 
 class MLPlay:
@@ -11,6 +13,9 @@ class MLPlay:
         """
         self.ball_served = False
         self.previous_ball = (0, 0)
+        # Need scikit-learn==0.22.2
+        with open(os.path.join(os.path.dirname(__file__), 'save', 'model.pickle'), 'rb') as f:
+            self.model = pickle.load(f)
 
     def update(self, scene_info):
         """
@@ -20,79 +25,38 @@ class MLPlay:
         if (scene_info["status"] == "GAME_OVER" or
                 scene_info["status"] == "GAME_PASS"):
             return "RESET"
-        current_ball = scene_info["ball"]
+
         if not self.ball_served:
-
             self.ball_served = True
-            command = random.choice(["SERVE_TO_RIGHT", "SERVE_TO_LEFT"])  # 發球
+            command = "SERVE_TO_LEFT"
         else:
-            # 1.Find Direction
-            direction = self.getDirection(
-                self.previous_ball, current_ball)
+            Ball_x = scene_info["ball"][0]
+            Ball_y = scene_info["ball"][1]
+            Ball_speed_x = scene_info["ball"][0] - self.previous_ball[0]
+            Ball_speed_y = scene_info["ball"][1] - self.previous_ball[1]
+            Platform = scene_info["platform"][0]
+            if Ball_speed_x > 0:
+                if Ball_speed_y > 0:
+                    Direction = 0
+                else:
+                    Direction = 1
+            else:
+                if Ball_speed_y > 0:
+                    Direction = 2
+                else:
+                    Direction = 3
+            x = np.array([Ball_x, Ball_y,  Platform, Ball_speed_x,
+                          Ball_speed_y]).reshape((1, -1))
+            y = self.model.predict(x)
+            if y == 0:
+                command = "NONE"
+            elif y == -1:
+                command = "MOVE_LEFT"
+            elif y == 1:
+                command = "MOVE_RIGHT"
 
-            predict = 100
-            if direction <= 2:  # 球正在往上不判斷落點
-                pass
-            else:  # 球正在往下，判斷球的落點
-                # 2.Predict Falling X
-                predict = self.predictFalling_x(
-                    self.previous_ball, current_ball)
-                # 判斷command
-
-            # 3.Return Command
-            command = self.getCommand(
-                scene_info["platform"][0], predict)
-
-        self.previous_ball = current_ball
+        self.previous_ball = scene_info["ball"]
         return command
-
-    def getDirection(self, previous_ball, current_ball):
-        """
-        result
-        1 : top right
-        2 : top left
-        3 : bottom left
-        4 : bottom right
-        """
-        if previous_ball[1] > current_ball[1]:   # top
-            if previous_ball[0] > current_ball[0]:
-                return 2
-            else:
-                return 1
-        else:   # bottom
-            if previous_ball[0] > current_ball[0]:
-                return 3
-            else:
-                return 4
-        #return 3
-
-    def predictFalling_x(self, previous_ball, current_ball):
-        # 若球的y位置未改變，代表尚未發球，return落點為正中央
-        if current_ball[1] == previous_ball[1]:
-            return 93
-
-        # 球正在往下，運算預期落點（忽視x邊界）
-        predict_x_raw = current_ball[0] + (((400 - current_ball[1]) / (current_ball[1] - previous_ball[1])) * (current_ball[0] - previous_ball[0]))
-
-        # 正規化落點
-        while predict_x_raw > 200 or predict_x_raw < 0:
-            if predict_x_raw > 200:
-                predict_x_raw = 400 - predict_x_raw
-            else:
-                predict_x_raw = 0 - predict_x_raw
-
-        return predict_x_raw
-
-    def getCommand(self, platform_x, predict_x):
-        """
-        return "MOVE_LEFT", "MOVE_RIGHT" or "NONE"
-        """
-        if (platform_x + 17) > predict_x and platform_x > 0:
-            return "MOVE_LEFT"
-        elif (platform_x + 23) < predict_x and platform_x < 160:
-            return "MOVE_RIGHT"
-        else:
-            return "NONE"
 
     def reset(self):
         """
